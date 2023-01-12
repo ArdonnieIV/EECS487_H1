@@ -47,15 +47,26 @@ class NGramLM:
 
         # Clean up
         toRemove = []
+        self.vocab_sum = 0
         self.ngram_count[0]['UNK'] = 0
 
         for token in self.ngram_count[0]:
+
+            if token != '<s>':
+                self.vocab_sum += self.ngram_count[0][token] # Should you count '<s>'?
+
             if self.ngram_count[0][token] < 2:
                 toRemove.append(token)
                 self.ngram_count[0]['UNK'] += self.ngram_count[0][token]
         
         for token in toRemove:
             self.ngram_count[0].pop(token)
+
+            # TODO - UNK tokens should trickle up
+            for i in range(1, self.ngram_size):
+                for bigToken in self.ngram_count[i]:
+                    if token in bigToken:
+                        print(token, bigToken)
 
         #################################################################################
 
@@ -72,26 +83,38 @@ class NGramLM:
         #################################################################################
 
     def linear_interp_prob(self, n_minus1_gram, unigram, lambdas):
+
         probability = 0
+        gramIndex = len(n_minus1_gram) - 1 if type(n_minus1_gram) == tuple else 0
 
-        #################################################################################
-        # TODO: calculate probability using linear interpolation
-        #################################################################################
+        for i, lam in enumerate(lambdas):
 
-        #################################################################################
+            thisProb = n_minus1_gram[i:] + (unigram,) if len(n_minus1_gram[i:]) > 0 else unigram
+
+            if type(thisProb) == tuple:
+                denom = thisProb[:-1] if len(thisProb[:-1]) > 1 else thisProb[:-1][0]
+                print(thisProb, denom)
+                print(self.ngram_count[gramIndex+1-i][thisProb], self.ngram_count[gramIndex-i][denom])
+                probability += lam * (self.ngram_count[gramIndex+1-i][thisProb] / self.ngram_count[gramIndex-i][denom])
+            else:
+                probability += lam * (self.ngram_count[0][thisProb] / self.vocab_sum)
 
         return probability
+
+        #################################################################################
     
     def get_probability(self, n_minus1_gram, unigram, smoothing_args):
+
         probability = 0
 
-        #################################################################################
-        # TODO: calculate probability using add-k smoothing or linear interpolation
-        #################################################################################
-
-        #################################################################################
+        if smoothing_args['method'] == 'add_k':
+            probability = self.add_k_smooth_prob(n_minus1_gram, unigram, smoothing_args['k'])
+        else:
+            probability = self.linear_interp_prob(n_minus1_gram, unigram, smoothing_args['lambdas'])
 
         return probability
+
+        #################################################################################
     
     def get_perplexity(self, text, smoothing_args):
         perplexity = 0
